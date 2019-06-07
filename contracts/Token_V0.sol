@@ -28,7 +28,7 @@ contract Token_V0 is ERC20,Ownable {
 
     /** Functions **/
 
-    function setInitials(uint256 totalSupply) public{
+    function setInitials(uint256 totalSupply) onlyOwner public{
         dataStore.setTotalSupply(totalSupply);
     }
 
@@ -55,6 +55,7 @@ contract Token_V0 is ERC20,Ownable {
     }
 
     function transferFrom(address sender, address recipient, uint256 amount) public returns (bool) {
+        require(dataStore.getAllowance(sender, msg.sender) >= amount, "AllowanceError: The spender does not hve the required allowance to spend token holder's tokens");
         _transfer(sender, recipient, amount);
         _approve(sender, msg.sender, dataStore.getAllowance(sender, msg.sender).sub(amount));
         return true;
@@ -64,6 +65,7 @@ contract Token_V0 is ERC20,Ownable {
         require(sender != address(0), "ERC20: transfer from the zero address");
         require(recipient != address(0), "ERC20: transfer to the zero address");
         require(!dataStore.checkLocked(sender), "TransactionsLocked: Transactions are locked by the owner");
+        require(dataStore.getBalance(sender) >= amount, "Insufficient Funds");
 
         dataStore.subBalance(sender, amount);
         dataStore.addBalance(recipient, amount);
