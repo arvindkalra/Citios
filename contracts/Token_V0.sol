@@ -10,8 +10,28 @@ import './Ownable.sol';
 * @title Token_V0
 * @notice A basic ERC20 token with modular data storage
 */
-contract Token_V0 is ERC20,Ownable {
+contract Token_V0 is ERC20,Ownable{
     using SafeMath for uint256;
+
+    event Lock(
+        address indexed _of,
+        bytes32 indexed _reason,
+        uint256 _amount,
+        uint256 _validity
+    );
+
+    /**
+     * @dev Records data of all the tokens unlocked
+     */
+    event Unlock(
+        address indexed _of,
+        bytes32 indexed _reason,
+        uint256 _amount
+    );
+
+    string internal constant ALREADY_LOCKED = "Tokens already locked";
+    string internal constant NOT_LOCKED = "No tokens locked";
+    string internal constant AMOUNT_ZERO = "Amount can not be 0";
 
     /** Events */
     event Mint(address indexed to, uint256 value);
@@ -19,9 +39,11 @@ contract Token_V0 is ERC20,Ownable {
     event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(address indexed owner, address indexed spender, uint256 value);
     TokenStorage dataStore;
+    address dataStoreAddress;
 
     constructor(address storeAddress) public {
         dataStore = TokenStorage(storeAddress);
+        dataStoreAddress = storeAddress;
     }
 
     /** Modifiers **/
@@ -64,7 +86,6 @@ contract Token_V0 is ERC20,Ownable {
     function _transfer(address sender, address recipient, uint256 amount) internal {
         require(sender != address(0), "ERC20: transfer from the zero address");
         require(recipient != address(0), "ERC20: transfer to the zero address");
-        require(!dataStore.checkLocked(sender), "TransactionsLocked: Transactions are locked by the owner");
         require(dataStore.getBalance(sender) >= amount, "Insufficient Funds");
 
         dataStore.subBalance(sender, amount);
@@ -80,6 +101,7 @@ contract Token_V0 is ERC20,Ownable {
         emit Approval(owner, spender, value);
     }
 
+    // Mintable Functionality
     function mintToken(address recipient, uint256 value) public onlyOwner{
         dataStore.addTotalSupply(value);
         dataStore.addBalance(recipient, value);
@@ -93,16 +115,211 @@ contract Token_V0 is ERC20,Ownable {
         emit Burn(msg.sender, value);
     }
 
-    function lockTransactions(address user) public onlyOwner{
-        dataStore.setLocked(user);
+
+    // Lockable Functionality according to EIP1132
+    /**
+    * @dev Locks a specified amount of tokens against an address,
+    *      for a specified reason and time
+    * @param _reason The reason to lock tokens
+    * @param _amount Number of tokens to be locked
+    * @param _time Lock time in seconds
+    */
+    function lock(bytes32 _reason, uint256 _amount, uint256 _time)
+    public
+    returns (bool)
+    {
+        uint256 validUntil = block.timestamp.add(_time);
+
+        uint256 tokensAlreadyLocked = dataStore.getLockedTokenAmount(msg.sender, _reason);
+
+        require(tokensAlreadyLocked == 0, ALREADY_LOCKED);
+        require(_amount != 0, AMOUNT_ZERO);
+
+        dataStore.addLockReason(msg.sender, _reason);
+
+        _transfer(msg.sender, dataStore, _amount);
+
+        dataStore.addLockedToken(msg.sender, _reason, _amount, validUntil);
+
+        emit Lock(msg.sender, _reason, _amount, validUntil);
+        return true;
     }
 
-    function unlockTransactions(address user) public onlyOwner{
-        dataStore.unSetLocked(user);
+
+    /**
+     * @dev Transfers and Locks a specified amount of tokens,
+     *      for a specified reason and time
+     * @param _to adress to which tokens are to be transfered
+     * @param _reason The reason to lock tokens
+     * @param _amount Number of tokens to be transfered and locked
+     * @param _time Lock time in seconds
+     */
+    function transferWithLock(address _to, bytes32 _reason, uint256 _amount, uint256 _time)
+    public
+    returns (bool)
+    {
+        uint256 validUntil = block.timestamp.add(_time);
+
+        uint256 tokensAlreadyLocked = dataStore.getLockedTokenAmount(_to, _reason);
+
+        require(tokensAlreadyLocked == 0, ALREADY_LOCKED);
+        require(_amount != 0, AMOUNT_ZERO);
+        require(_to != address(0), "ERC20: transfer to the zero address");
+
+        dataStore.addLockReason(_to, _reason);
+
+        _transfer(msg.sender, dataStore, _amount);
+
+        dataStore.addLockedToken(_to, _reason, _amount, validUntil);
+
+        emit Lock(_to, _reason, _amount, validUntil);
+        return true;
     }
 
-    function caller() public view returns(address){
-        return dataStore.caller();
+
+    /**
+    * @dev Returns tokens locked for a specified address for a
+    *      specified reason
+    *
+    * @param _of The address whose tokens are locked
+    * @param _reason The reason to query the lock tokens for
+    */
+    function tokensLocked(address _of, bytes32 _reason)
+    public
+    view
+    returns (uint256 amount)
+    {
+        return dataStore.getLockedTokenAmount(_of, _reason);
+    }
+
+
+    /**
+    * @dev Returns tokens locked for a specified address for a
+    *      specified reason at a specific time
+    *
+    * @param _of The address whose tokens are locked
+    * @param _reason The reason to query the lock tokens for
+    * @param _time The timestamp to query the lock tokens for
+    */
+    function tokensLockedAtTime(address _of, bytes32 _reason, uint256 _time)
+    public
+    view
+    returns (uint256 amount)
+    {
+        amount = dataStore.getLockedTokensAtTime(_of, _reason, _time);
+    }
+
+
+    /**
+ * @dev Returns total tokens held by an address (locked + transferable)
+ * @param _of The address to query the total balance of
+ */
+    function totalBalanceOf(address _of)
+    public
+    view
+    returns (uint256 amount)
+    {
+        amount = balanceOf(_of);
+        amount = amount + dataStore.getTotalLockedTokens(_of);
+    }
+
+
+    /**
+    * @dev Extends lock for a specified reason and time
+    * @param _reason The reason to lock tokens
+    * @param _time Lock extension time in seconds
+    */
+    function extendLock(bytes32 _reason, uint256 _time)
+    public
+    returns (bool)
+    {
+        uint256 tokensAlreadyLocked = dataStore.getLockedTokenAmount(msg.sender, _reason);
+        require(tokensAlreadyLocked > 0, NOT_LOCKED);
+
+        (uint256 amount, uint256 validity) = dataStore.extendTokenLock(msg.sender, _reason, _time);
+
+        emit Lock(msg.sender, _reason, amount, validity);
+        return true;
+    }
+
+
+    /**
+  * @dev Increase number of tokens locked for a specified reason
+  * @param _reason The reason to lock tokens
+  * @param _amount Number of tokens to be increased
+  */
+    function increaseLockAmount(bytes32 _reason, uint256 _amount)
+    public
+    returns (bool)
+    {
+        uint256 tokensAlreadyLocked = dataStore.getLockedTokenAmount(msg.sender, _reason);
+        require(tokensAlreadyLocked > 0, NOT_LOCKED);
+        _transfer(msg.sender, dataStore, _amount);
+        (uint256 amount, uint256 validity) = dataStore.increaseLockAmount(msg.sender, _reason, _amount);
+
+        emit Lock(msg.sender, _reason, amount, validity);
+        return true;
+    }
+
+
+    /**
+    * @dev Returns unlockable tokens for a specified address for a specified reason
+    * @param _of The address to query the the unlockable token count of
+    * @param _reason The reason to query the unlockable tokens for
+    */
+    function tokensUnlockable(address _of, bytes32 _reason)
+    public
+    view
+    returns (uint256 amount)
+    {
+        return dataStore.getUnlockable(_of, _reason);
+    }
+
+
+    /**
+    * @dev Unlocks the unlockable tokens of a specified address
+    * @param _of Address of user, claiming back unlockable tokens
+    */
+    function unlock(address _of)
+    public
+    returns (uint256 unlockableTokens)
+    {
+        uint256 lockedTokens;
+        uint256 numLockReasons = dataStore.getNumberOfLockReasons(_of);
+        for (uint256 i = 0; i < numLockReasons; i++) {
+            bytes32 reason = dataStore.getLockReason(_of, i);
+            lockedTokens = tokensUnlockable(_of, reason);
+            if (lockedTokens > 0) {
+                unlockableTokens += lockedTokens;
+                dataStore.setClaimed(_of, reason);
+                emit Unlock(_of, reason, lockedTokens);
+            }
+        }
+
+        if (unlockableTokens > 0)
+            _transfer(dataStore, _of, unlockableTokens);
+    }
+
+
+    /**
+    * @dev Gets the unlockable tokens of a specified address
+    * @param _of The address to query the the unlockable token count of
+    */
+    function getUnlockableTokens(address _of)
+    public
+    view
+    returns (uint256 unlockableTokens)
+    {
+        uint256 numLockReasons = dataStore.getNumberOfLockReasons(_of);
+        for (uint256 i = 0; i < numLockReasons; i++) {
+            bytes32 reason = dataStore.getLockReason(_of, i);
+            unlockableTokens = unlockableTokens + tokensUnlockable(_of, reason);
+        }
+    }
+
+
+    function caller(address _of) public view returns(uint256){
+        return now;
     }
 
 }

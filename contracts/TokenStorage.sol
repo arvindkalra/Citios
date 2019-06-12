@@ -87,22 +87,84 @@ contract TokenStorage  is Ownable{
     }
 
 
-    // Locker with Getter and Setter
-    mapping(address => bool) internal locked;
+    // Locking Storage
+    /**
+    * @dev Reasons why a user's tokens have been locked
+    */
+    mapping(address => bytes32[]) internal lockReason;
 
-    function checkLocked(address user) public view onlyAllowedAccess returns(bool){
-        return locked[user];
+    /**
+     * @dev locked token structure
+     */
+    struct lockToken {
+        uint256 amount;
+        uint256 validity;
+        bool claimed;
     }
 
-    function setLocked(address user) public onlyAllowedAccess {
-        locked[user] = true;
+    /**
+     * @dev Holds number & validity of tokens locked for a given reason for
+     *      a specified address
+     */
+    mapping(address => mapping(bytes32 => lockToken)) internal locked;
+
+
+    // Lock Access Functions
+    function getLockedTokenAmount(address _of, bytes32 _reason) public view onlyAllowedAccess returns (uint256 amount){
+        if (!locked[_of][_reason].claimed)
+            amount = locked[_of][_reason].amount;
     }
 
-    function unSetLocked(address user) public onlyAllowedAccess {
-        locked[user] = false;
+    function getLockedTokensAtTime(address _of, bytes32 _reason, uint256 _time) public view onlyAllowedAccess returns(uint256 amount){
+        if (locked[_of][_reason].validity > _time)
+            amount = locked[_of][_reason].amount;
     }
 
-    function caller() public view  onlyAllowedAccess returns(address){
-        return msg.sender;
+    function getTotalLockedTokens(address _of) public view onlyAllowedAccess returns(uint256 amount){
+        for (uint256 i = 0; i < lockReason[_of].length; i++) {
+            amount = amount.add(getLockedTokenAmount(_of, lockReason[_of][i]));
+        }
+    }
+
+    function extendTokenLock(address _of, bytes32 _reason, uint256 _time) public onlyAllowedAccess returns(uint256 amount, uint256 validity){
+
+        locked[_of][_reason].validity = locked[_of][_reason].validity.add(_time);
+        amount = locked[_of][_reason].amount;
+        validity = locked[_of][_reason].validity;
+    }
+
+    function increaseLockAmount(address _of, bytes32 _reason, uint256 _amount) public onlyAllowedAccess returns(uint256 amount, uint256 validity){
+        locked[_of][_reason].amount = locked[_of][_reason].amount.add(_amount);
+        amount = locked[_of][_reason].amount;
+        validity = locked[_of][_reason].validity;
+    }
+
+    function getUnlockable(address _of, bytes32 _reason) public view onlyAllowedAccess returns(uint256 amount){
+        if (locked[_of][_reason].validity <= now && !locked[_of][_reason].claimed)
+            amount = locked[_of][_reason].amount;
+    }
+
+    function addLockedToken(address _of, bytes32 _reason, uint256 _amount, uint256 _validity) public onlyAllowedAccess {
+        locked[_of][_reason] = lockToken(_amount, _validity, false);
+    }
+
+    function addLockReason(address _of, bytes32 _reason) public onlyAllowedAccess {
+        lockReason[_of].push(_reason);
+    }
+
+    function getNumberOfLockReasons(address _of) public view onlyAllowedAccess returns(uint256 number){
+        number = lockReason[_of].length;
+    }
+
+    function getLockReason(address _of, uint256 _i) public view onlyAllowedAccess returns(bytes32 reason){
+        reason = lockReason[_of][_i];
+    }
+
+    function setClaimed(address _of, bytes32 _reason) public onlyAllowedAccess{
+        locked[_of][_reason].claimed = true;
+    }
+
+    function caller(address _of) public view  onlyAllowedAccess returns(uint){
+        return getTotalLockedTokens(_of);
     }
 }

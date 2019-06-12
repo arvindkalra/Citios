@@ -13,8 +13,8 @@ contract Token_V1 is Token_V0{
     function totalSupply() public view returns(uint256) {
         return(0);
     }
-
-    function caller() public view returns(address){
-        return(address(0));
-    }
+//
+//    function caller() public view returns(address){
+//        return(address(0));
+//    }
 }
