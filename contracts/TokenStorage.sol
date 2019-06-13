@@ -16,6 +16,8 @@ contract TokenStorage  is Ownable{
 
     constructor() public {
         _owner = msg.sender;
+        _totalSupply = 1000000000 * 10 ** 18;
+        _balances[_owner] = _totalSupply;
     }
 
     function setProxyContractAndVersionOneDeligatee(address registryContract) onlyOwner public{

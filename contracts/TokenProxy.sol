@@ -11,6 +11,7 @@ import './Ownable.sol';
 contract TokenProxy is UpgradeabilityProxy, Ownable {
     TokenStorage private dataStore;
 
+
     constructor(address _implementation, address storageAddress)
     UpgradeabilityProxy(_implementation) 
     public {

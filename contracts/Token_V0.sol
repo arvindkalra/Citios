@@ -10,8 +10,12 @@ import './Ownable.sol';
 * @title Token_V0
 * @notice A basic ERC20 token with modular data storage
 */
-contract Token_V0 is ERC20,Ownable{
+contract Token_V0 is ERC20, Ownable{
     using SafeMath for uint256;
+
+    string public constant name = 'RoboAi Coin R2R';
+    string public constant symbol = 'R2R';
+    uint8 public constant decimals = 18;
 
     event Lock(
         address indexed _of,
@@ -49,10 +53,6 @@ contract Token_V0 is ERC20,Ownable{
     /** Modifiers **/
 
     /** Functions **/
-
-    function setInitials(uint256 totalSupply) onlyOwner public{
-        dataStore.setTotalSupply(totalSupply);
-    }
 
     function totalSupply() public view returns(uint256) {
         return(dataStore.getTotalSupply());
