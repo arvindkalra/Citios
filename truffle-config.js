@@ -11,8 +11,10 @@
  *     gasPrice: 10000000000,
  *   },
  */
-const HDWalletProvider = require("truffle-hdwallet-provider");
-require('dotenv').config()  // Stores environment-specific variable from '.env' to process.env
+// const HDWalletProvider = require("truffle-hdwallet-provider");
+// require('dotenv').config()  // Stores environment-specific variable from '.env' to process.env
+const privateKey = "36B298BE4646D2044F02ADCD1AF39A9069EF798CA4EF6F439553AA05935AAE47";
+const PrivateKeyProvider = require("truffle-privatekey-provider");
 
 module.exports = {
   // See <http://truffleframework.com/docs/advanced/configuration>
@@ -24,13 +26,19 @@ module.exports = {
 			port: 8545,
 			network_id: '*',
 		},
-		ropsten: {
-	      provider: function () {
-	          return new HDWalletProvider(process.env.METAMASK_MNEMONIC, "https://ropsten.infura.io/v3/" + process.env.INFURA_API_KEY)
-	      },
-	      network_id: 3,
-	      gas: 7000000
-	    },
+
+		kovan:{
+			provider: new PrivateKeyProvider(privateKey, "https://kovan.infura.io/ZWXhYfP2uIvdg1yKuQNY"),
+			network_id: 42,
+			gasPrice: 1e+9
+		},
+
+		mainnet: {
+			provider: new PrivateKeyProvider(privateKey, "https://mainnet.infura.io/ZWXhYfP2uIvdg1yKuQNY"),
+			network_id: 1,
+			gasPrice: 1e+9
+		}
+
 	},
 	mocha: {
 	   reporter: 'eth-gas-reporter',

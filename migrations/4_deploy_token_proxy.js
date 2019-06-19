@@ -6,8 +6,5 @@ module.exports = function(deployer, network, accounts) {
   let owner = accounts[0];
   console.log('owner of proxy contract: ' + owner);
   deployer.deploy(TokenProxy, Token_V0.address, TokenStorage.address, {from:owner});
-  TokenProxy.deployed().then(function () {
-    TokenStorage.at(TokenStorage.address)
-        .setProxyContractAndVersionOneDeligatee(TokenProxy.address).call({from:owner})
-  });
+
 };

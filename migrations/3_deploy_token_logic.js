@@ -6,5 +6,5 @@ module.exports = function(deployer, network, accounts) {
   let owner = accounts[0];
   console.log('owner of tokenContracts' + owner)
   deployer.deploy(Token_V0, TokenStorage.address, {from:owner});
-  deployer.deploy(Token_V1, TokenStorage.address, {from:owner});
+  // deployer.deploy(Token_V1, TokenStorage.address, {from:owner});
 };
